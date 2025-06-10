@@ -6,13 +6,39 @@
 #include <sstream>        // for istringstream
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <string>
+#include <fstream>
+#include <unordered_map>
 using namespace std;
 
+string get_mime_type(const string& path, const unordered_map<string, string>& mime_types) {
+    size_t dot_pos = path.rfind('.');
+    if(dot_pos != string::npos) {
+        string ext = path.substr(dot_pos);
+        if(mime_types.count(ext)) {
+            return mime_types.at(ext);
+        }
+    }
+    return "application/octet-stream"; // default fallback
+}
+
 int main() {
-    int server_fd;
+    int port = 8080;
+    unordered_map<string, string> mime_types = {
+    {".html", "text/html"},
+    {".css", "text/css"},
+    {".js", "application/javascript"},
+    {".png", "image/png"},
+    {".jpg", "image/jpeg"},
+    {".jpeg", "image/jpeg"},
+    {".svg", "image/svg+xml"},
+    {".json", "application/json"},
+    {".txt", "text/plain"},
+};
+
 
     // Create Socket
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
         cerr << "Failed to create socket\n";
         return 1;
@@ -33,7 +59,7 @@ int main() {
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(8080);
+    address.sin_port = htons(port);
 
     if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
         cerr << "Bind failed\n";
@@ -103,8 +129,26 @@ int main() {
     string content_type = "text/html"; //default
 
     if(file_fd == -1) {
-        body = "404 Not Found";
         status_line = "HTTP/1.1 404 Not Found";
+        string not_found_file = "public/404.html";
+        int nf_fd = open(not_found_file.c_str(), O_RDONLY);
+
+        if(nf_fd != -1) {
+            struct stat nf_stat;
+            fstat(nf_fd, &nf_stat);
+            size_t nf_size = nf_stat.st_size;
+
+            char* nf_buffer = new char[nf_size];
+            read(nf_fd, nf_buffer, nf_size);
+            body.assign(nf_buffer, nf_size);
+            delete[] nf_buffer;
+            close(nf_fd);
+
+            content_type = get_mime_type(not_found_file, mime_types);
+        } else {
+            body = "<h1>404 Not Found</h1>";
+            content_type = "text/html";
+        }
     } else {
         // Get file size
         struct stat file_stat;
@@ -116,30 +160,12 @@ int main() {
         read(file_fd, file_buffer, file_size);
         body.assign(file_buffer, file_size);
         delete[] file_buffer;
-
         close(file_fd);
+
         status_line = "HTTP/1.1 200 OK";
 
-        if (requested_file.ends_with(".css")) {
-            content_type = "text/css";
-        } else if (requested_file.ends_with(".js")) {
-            content_type = "application/javascript";
-        } else if (requested_file.ends_with(".txt")) {
-            content_type = "text/plain";
-        }
+        content_type = get_mime_type(requested_file, mime_types);
     }
-
-    // routing using path
-    // if(path == "/") {
-    //     body = "Welcome to the Homepage";
-    //     status_line = "HTTP/1.1 200 OK";
-    // } else if (path == "/about") {
-    //     body = "This is the about page";
-    //     status_line = "HTTP/1.1 200 OK";
-    // } else {
-    //     body = "404 Not Found";
-    //     status_line = "HTTP/1.1 404 Not Found";
-    // }
 
 
     //build & send the res
