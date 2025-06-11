@@ -18,6 +18,7 @@ This project demonstrates how web servers work under the hood by manually handli
 
 ## 📁 File Structure
 
+```
 http-server-from-scratch/
 ├── server.cpp # Core server logic
 ├── public/ # Static files served by the server
@@ -26,6 +27,7 @@ http-server-from-scratch/
 │ └── 404.html
 ├── Makefile # Build instructions
 └── README.md # This file
+```
 
 ---
 
